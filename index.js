@@ -1,46 +1,28 @@
 var _ = require('lodash');
-var RemoteMethods = require('./lib/remote-methods.js');
+var EventEmitter = require('events').EventEmitter;
 
 //options : {only: [], except: []}
 //only: only expose specified methods, disable others
 //except: expose all methods, except specified ones
 //symbol @ donates the method is static
 
-module.exports  = function RemoteRouting(Model, options) {
+module.exports = function(Model, options) {
+  Model.on('attached', function () {
+    RemoteRouting(Model, options);
+  })
+};
+
+function RemoteRouting(Model, options) {
   options = options || {};
 
-  var methods =[
-    '@create',
-    '@upsert',
-    '@exists',
-    '@findById',
-    '@deleteById',
-    '@count',
-    '@find',
-    '@findOne',
-    '@createChangeStream',
-    '@updateAll',
-    'updateAttributes'
-  ]
-
-  if (Model.modelName === 'User' || Model.base.modelName === 'User') {
-    methods = _(methods).concat([
-      '@login',
-      '@logout',
-      '@confirm',
-      '@resetPassword']).value();
-  }
-
-  methods = methods.concat(RemoteMethods(Model));
+  var methods = remoteMethods(Model);
 
   if (options.only && options.only.length) {
-    methods = _.difference(methods, options.only);
+    methods = handlerOnlyOption(methods, options.only);
   }
 
   if (options.except && options.except.length) {
-    methods = _.filter(methods, function(method){
-      return _.includes(options.except, method);
-    });
+    methods = handleExceptOption(methods, options.except);
   }
 
   methods.forEach(function(method){
@@ -50,5 +32,35 @@ module.exports  = function RemoteRouting(Model, options) {
       Model.disableRemoteMethod(method, false);
     }
   });
+}
+
+function handlerOnlyOption (all, wanted) {
+  return _.difference(all, wanted);
+}
+
+function handleExceptOption (all, unwanted) {
+  return _.filter(all, function(method){
+      return _.includes(unwanted, method);
+  });
+}
+
+
+function remoteMethods (Model) {
+  return Model.app.handler('rest').adapter.allRoutes().filter(function(route) {
+    return route.method.split('.')[0] === Model.modelName;
+  }).map(function(route) {
+    var method = route.method.split('.').slice(1).join('.');
+
+    if (isStatic(method)) {
+      method = ['@', method].join('');
+    } else {
+      method = method.replace(/^prototype\./, '');
+    }
+    return method;
+  });
+}
+
+function isStatic (method) {
+  return !/^prototype\./.test(method);
 }
 
