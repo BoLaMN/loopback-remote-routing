@@ -17,7 +17,7 @@ function RemoteRouting(Model, options) {
   var methods = utils.remoteMethods(Model);
 
   if (options.only && options.only.length) {
-    methods = utils.handlerOnlyOption(methods, options.only);
+    methods = utils.handleOnlyOption(methods, options.only);
   }
 
   if (options.except && options.except.length) {
